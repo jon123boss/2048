@@ -112,6 +112,17 @@ def merge_tiles(direction):
                     merged = True
     return merged
 
+def can_move():
+    for x in range(GRID_SIZE):
+        for y in range(GRID_SIZE):
+            if grid[x][y] == 0:
+                return True
+            if x < GRID_SIZE - 1 and grid[x][y] == grid[x + 1][y]:
+                return True
+            if y < GRID_SIZE - 1 and grid[x][y] == grid[x][y + 1]:
+                return True
+    return False
+
 def draw_grid():
     for x in range(GRID_SIZE):
         for y in range(GRID_SIZE):
@@ -132,14 +143,21 @@ def draw_score():
     score_rect = score_text.get_rect(center=(WINDOW_SIZE[0] // 2, 50))
     screen.blit(score_text, score_rect)
 
+def draw_game_over():
+    font = pygame.font.Font(None, 72)
+    game_over_text = font.render("Game Over", True, (255, 0, 0))
+    game_over_rect = game_over_text.get_rect(center=(WINDOW_SIZE[0] // 2, WINDOW_SIZE[1] // 2))
+    screen.blit(game_over_text, game_over_rect)
+
 running = True
+game_over = False
 spawn_tile()
 spawn_tile()
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN and not game_over:
             moved = False
             if event.key == pygame.K_LEFT:
                 moved = slide_tiles("left")
@@ -163,10 +181,14 @@ while running:
                     slide_tiles("down")
             if moved:
                 spawn_tile()
+            if not can_move():
+                game_over = True
 
     screen.fill(BACKGROUND_COLOR)
     draw_score()
     draw_grid()
+    if game_over:
+        draw_game_over()
     pygame.display.flip()
 
 pygame.quit()
