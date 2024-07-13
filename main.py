@@ -5,131 +5,170 @@ import math
 pygame.init()
 
 WINDOW_SIZE = (400, 500)
-GRID_SIZE = 4
-TILE_SIZE = WINDOW_SIZE[0] // GRID_SIZE
-FPS = 60
-ANIMATION_SPEED = 10
-
 screen = pygame.display.set_mode(WINDOW_SIZE)
 pygame.display.set_caption("2048")
 
 BACKGROUND_COLOR = (250, 248, 239)
-TILE_COLORS = [
-    (205, 193, 180), (238, 228, 218), (237, 224, 200), (242, 177, 121),
-    (245, 149, 99), (246, 124, 95), (246, 94, 59), (237, 207, 114)
-]
+TILE_COLORS = [(205, 193, 180), (238, 228, 218), (237, 224, 200), (242, 177, 121),
+               (245, 149, 99), (246, 124, 95), (246, 94, 59), (237, 207, 114), (119, 221, 119), (135, 206, 250), (255, 182, 193)]
 
-clock = pygame.time.Clock()
+MULTIPLIER_TILE = 1024
+CLEAR_ROW_TILE = 2048
+CLEAR_COLUMN_TILE = 4096
+
+GRID_SIZE = 4
 grid = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 score = 0
-animations = []
-
-class Animation:
-    def __init__(self, start_pos, end_pos, value):
-        self.start_x, self.start_y = start_pos
-        self.end_x, self.end_y = end_pos
-        self.current_x, self.current_y = self.start_x, self.start_y
-        self.value = value
-        self.dx = self.end_x - self.start_x
-        self.dy = self.end_y - self.start_y
-        self.distance = math.sqrt(self.dx ** 2 + self.dy ** 2)
-
-        if self.distance != 0:
-            self.step_x = self.dx / self.distance * ANIMATION_SPEED
-            self.step_y = self.dy / self.distance * ANIMATION_SPEED
-        else:
-            self.step_x = 0
-            self.step_y = 0
-
-        self.completed = False
-
-    def update(self):
-        self.current_x += self.step_x
-        self.current_y += self.step_y
-
-        if (self.dx > 0 and self.current_x >= self.end_x) or (self.dx < 0 and self.current_x <= self.end_x):
-            self.current_x = self.end_x
-            self.completed = True
-
-        if (self.dy > 0 and self.current_y >= self.end_y) or (self.dy < 0 and self.current_y <= self.end_y):
-            self.current_y = self.end_y
-            self.completed = True
-
-    def draw(self, surface):
-        if self.value > 0:
-            color_index = int(math.log2(self.value)) - 1
-            tile_color = TILE_COLORS[color_index]
-            rect = pygame.Rect(self.current_x, self.current_y, TILE_SIZE, TILE_SIZE)
-            pygame.draw.rect(surface, tile_color, rect)
-            font = pygame.font.Font(None, 36)
-            text = font.render(str(self.value), True, (0, 0, 0))
-            text_rect = text.get_rect(center=rect.center)
-            surface.blit(text, text_rect)
 
 def spawn_tile():
     empty_cells = [(x, y) for x in range(GRID_SIZE) for y in range(GRID_SIZE) if grid[x][y] == 0]
     if empty_cells:
         x, y = random.choice(empty_cells)
-        grid[x][y] = 2 if random.random() < 0.9 else 4
+        tile_type = random.choices([2, 4, MULTIPLIER_TILE, CLEAR_ROW_TILE, CLEAR_COLUMN_TILE],
+                                   weights=[80, 15, 1, 2, 2], k=1)[0]
+        grid[x][y] = tile_type
 
-def move_and_merge_tiles(direction):
-    global score
+def slide_tiles(direction):
     moved = False
+    for _ in range(GRID_SIZE):
+        if direction == "left":
+            for y in range(GRID_SIZE):
+                row = [grid[x][y] for x in range(GRID_SIZE) if grid[x][y] != 0]
+                for x in range(GRID_SIZE):
+                    if x < len(row):
+                        if grid[x][y] != row[x]:
+                            grid[x][y] = row[x]
+                            moved = True
+                    else:
+                        if grid[x][y] != 0:
+                            grid[x][y] = 0
+                            moved = True
+        elif direction == "right":
+            for y in range(GRID_SIZE):
+                row = [grid[x][y] for x in range(GRID_SIZE-1, -1, -1) if grid[x][y] != 0]
+                for x in range(GRID_SIZE-1, -1, -1):
+                    if GRID_SIZE-x-1 < len(row):
+                        if grid[x][y] != row[GRID_SIZE-x-1]:
+                            grid[x][y] = row[GRID_SIZE-x-1]
+                            moved = True
+                    else:
+                        if grid[x][y] != 0:
+                            grid[x][y] = 0
+                            moved = True
+        elif direction == "up":
+            for x in range(GRID_SIZE):
+                col = [grid[x][y] for y in range(GRID_SIZE) if grid[x][y] != 0]
+                for y in range(GRID_SIZE):
+                    if y < len(col):
+                        if grid[x][y] != col[y]:
+                            grid[x][y] = col[y]
+                            moved = True
+                    else:
+                        if grid[x][y] != 0:
+                            grid[x][y] = 0
+                            moved = True
+        elif direction == "down":
+            for x in range(GRID_SIZE):
+                col = [grid[x][y] for y in range(GRID_SIZE-1, -1, -1) if grid[x][y] != 0]
+                for y in range(GRID_SIZE-1, -1, -1):
+                    if GRID_SIZE-y-1 < len(col):
+                        if grid[x][y] != col[GRID_SIZE-y-1]:
+                            grid[x][y] = col[GRID_SIZE-y-1]
+                            moved = True
+                    else:
+                        if grid[x][y] != 0:
+                            grid[x][y] = 0
+                            moved = True
+    return moved
+
+def merge_tiles(direction):
+    global score
     merged = False
-
-    def merge_line(line):
-        nonlocal moved, merged
-        new_line = [i for i in line if i != 0]
-        for i in range(1, len(new_line)):
-            if new_line[i] == new_line[i - 1]:
-                new_line[i - 1] *= 2
-                score += new_line[i - 1]
-                new_line[i] = 0
-                merged = True
-        new_line = [i for i in new_line if i != 0]
-        while len(new_line) < GRID_SIZE:
-            new_line.append(0)
-        return new_line
-
-    def move_line(line):
-        nonlocal moved
-        new_line = merge_line(line)
-        if new_line != line:
-            moved = True
-        return new_line
-
     if direction == "left":
         for y in range(GRID_SIZE):
-            new_row = move_line([grid[x][y] for x in range(GRID_SIZE)])
-            for x in range(GRID_SIZE):
-                if grid[x][y] != new_row[x]:
-                    animations.append(Animation((x * TILE_SIZE, y * TILE_SIZE), (new_row.index(grid[x][y]) * TILE_SIZE, y * TILE_SIZE), grid[x][y]))
-                grid[x][y] = new_row[x]
+            for x in range(GRID_SIZE-1):
+                if grid[x][y] == grid[x+1][y] and grid[x][y] != 0:
+                    grid[x][y] *= 2
+                    score += grid[x][y]
+                    grid[x+1][y] = 0
+                    merged = True
+                elif grid[x][y] == MULTIPLIER_TILE or grid[x+1][y] == MULTIPLIER_TILE:
+                    score *= 2
+                    grid[x][y] = 0
+                    grid[x+1][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_ROW_TILE or grid[x+1][y] == CLEAR_ROW_TILE:
+                    for i in range(GRID_SIZE):
+                        grid[i][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_COLUMN_TILE or grid[x+1][y] == CLEAR_COLUMN_TILE:
+                    for j in range(GRID_SIZE):
+                        grid[x][j] = 0
+                    merged = True
     elif direction == "right":
         for y in range(GRID_SIZE):
-            new_row = move_line([grid[x][y] for x in range(GRID_SIZE - 1, -1, -1)])
-            new_row.reverse()
-            for x in range(GRID_SIZE):
-                if grid[x][y] != new_row[x]:
-                    animations.append(Animation((x * TILE_SIZE, y * TILE_SIZE), (GRID_SIZE - 1 - new_row.index(grid[x][y]) * TILE_SIZE, y * TILE_SIZE), grid[x][y]))
-                grid[x][y] = new_row[x]
+            for x in range(GRID_SIZE-1, 0, -1):
+                if grid[x][y] == grid[x-1][y] and grid[x][y] != 0:
+                    grid[x][y] *= 2
+                    score += grid[x][y]
+                    grid[x-1][y] = 0
+                    merged = True
+                elif grid[x][y] == MULTIPLIER_TILE or grid[x-1][y] == MULTIPLIER_TILE:
+                    score *= 2
+                    grid[x][y] = 0
+                    grid[x-1][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_ROW_TILE or grid[x-1][y] == CLEAR_ROW_TILE:
+                    for i in range(GRID_SIZE):
+                        grid[i][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_COLUMN_TILE or grid[x-1][y] == CLEAR_COLUMN_TILE:
+                    for j in range(GRID_SIZE):
+                        grid[x][j] = 0
+                    merged = True
     elif direction == "up":
         for x in range(GRID_SIZE):
-            new_col = move_line([grid[x][y] for y in range(GRID_SIZE)])
-            for y in range(GRID_SIZE):
-                if grid[x][y] != new_col[y]:
-                    animations.append(Animation((x * TILE_SIZE, y * TILE_SIZE), (x * TILE_SIZE, new_col.index(grid[x][y]) * TILE_SIZE), grid[x][y]))
-                grid[x][y] = new_col[y]
+            for y in range(GRID_SIZE-1):
+                if grid[x][y] == grid[x][y+1] and grid[x][y] != 0:
+                    grid[x][y] *= 2
+                    score += grid[x][y]
+                    grid[x][y+1] = 0
+                    merged = True
+                elif grid[x][y] == MULTIPLIER_TILE or grid[x][y+1] == MULTIPLIER_TILE:
+                    score *= 2
+                    grid[x][y] = 0
+                    grid[x][y+1] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_ROW_TILE or grid[x][y+1] == CLEAR_ROW_TILE:
+                    for i in range(GRID_SIZE):
+                        grid[i][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_COLUMN_TILE or grid[x][y+1] == CLEAR_COLUMN_TILE:
+                    for j in range(GRID_SIZE):
+                        grid[x][j] = 0
+                    merged = True
     elif direction == "down":
         for x in range(GRID_SIZE):
-            new_col = move_line([grid[x][y] for y in range(GRID_SIZE - 1, -1, -1)])
-            new_col.reverse()
-            for y in range(GRID_SIZE):
-                if grid[x][y] != new_col[y]:
-                    animations.append(Animation((x * TILE_SIZE, y * TILE_SIZE), (x * TILE_SIZE, (GRID_SIZE - 1 - new_col.index(grid[x][y])) * TILE_SIZE), grid[x][y]))
-                grid[x][y] = new_col[y]
-
-    return moved or merged
+            for y in range(GRID_SIZE-1, 0, -1):
+                if grid[x][y] == grid[x][y-1] and grid[x][y] != 0:
+                    grid[x][y] *= 2
+                    score += grid[x][y]
+                    grid[x][y-1] = 0
+                    merged = True
+                elif grid[x][y] == MULTIPLIER_TILE or grid[x][y-1] == MULTIPLIER_TILE:
+                    score *= 2
+                    grid[x][y] = 0
+                    grid[x][y-1] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_ROW_TILE or grid[x][y-1] == CLEAR_ROW_TILE:
+                    for i in range(GRID_SIZE):
+                        grid[i][y] = 0
+                    merged = True
+                elif grid[x][y] == CLEAR_COLUMN_TILE or grid[x][y-1] == CLEAR_COLUMN_TILE:
+                    for j in range(GRID_SIZE):
+                        grid[x][j] = 0
+                    merged = True
+    return merged
 
 def can_move():
     for x in range(GRID_SIZE):
@@ -147,17 +186,14 @@ def draw_grid():
         for y in range(GRID_SIZE):
             value = grid[x][y]
             if value > 0:
-                color_index = int(math.log2(value)) - 1
+                color_index = int(math.log2(value)) - 1 if value <= 512 else 8 if value == MULTIPLIER_TILE else 9 if value == CLEAR_ROW_TILE else 10
                 tile_color = TILE_COLORS[color_index]
-                rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                rect = pygame.Rect(x * 100, y * 100 + 100, 100, 100)
                 pygame.draw.rect(screen, tile_color, rect)
                 font = pygame.font.Font(None, 36)
-                text = font.render(str(value), True, (0, 0, 0))
+                text = font.render(str(value) if value <= 512 else "x2" if value == MULTIPLIER_TILE else "R" if value == CLEAR_ROW_TILE else "C", True, (0, 0, 0))
                 text_rect = text.get_rect(center=rect.center)
                 screen.blit(text, text_rect)
-            else:
-                rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                pygame.draw.rect(screen, TILE_COLORS[0], rect)
 
 def draw_score():
     font = pygame.font.Font(None, 48)
@@ -181,14 +217,26 @@ while running:
             running = False
         elif event.type == pygame.KEYDOWN and not game_over:
             moved = False
-            if event.key in [pygame.K_LEFT, pygame.K_a]:
-                moved = move_and_merge_tiles("left")
-            elif event.key in [pygame.K_RIGHT, pygame.K_d]:
-                moved = move_and_merge_tiles("right")
-            elif event.key in [pygame.K_UP, pygame.K_w]:
-                moved = move_and_merge_tiles("up")
-            elif event.key in [pygame.K_DOWN, pygame.K_s]:
-                moved = move_and_merge_tiles("down")
+            if event.key == pygame.K_LEFT:
+                moved = slide_tiles("left")
+                if moved or merge_tiles("left"):
+                    merge_tiles("left")
+                    slide_tiles("left")
+            elif event.key == pygame.K_RIGHT:
+                moved = slide_tiles("right")
+                if moved or merge_tiles("right"):
+                    merge_tiles("right")
+                    slide_tiles("right")
+            elif event.key == pygame.K_UP:
+                moved = slide_tiles("up")
+                if moved or merge_tiles("up"):
+                    merge_tiles("up")
+                    slide_tiles("up")
+            elif event.key == pygame.K_DOWN:
+                moved = slide_tiles("down")
+                if moved or merge_tiles("down"):
+                    merge_tiles("down")
+                    slide_tiles("down")
             if moved:
                 spawn_tile()
             if not can_move():
@@ -197,13 +245,8 @@ while running:
     screen.fill(BACKGROUND_COLOR)
     draw_score()
     draw_grid()
-    for animation in animations:
-        animation.update()
-        animation.draw(screen)
-    animations = [anim fora anim in animations if not anim.completed]
     if game_over:
         draw_game_over()
     pygame.display.flip()
-    clock.tick(FPS)
 
 pygame.quit()
