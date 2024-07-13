@@ -4,7 +4,7 @@ import math
 
 pygame.init()
 
-WINDOW_SIZE = (400, 400)
+WINDOW_SIZE = (400, 500)
 screen = pygame.display.set_mode(WINDOW_SIZE)
 pygame.display.set_caption("2048")
 
@@ -14,6 +14,7 @@ TILE_COLORS = [(205, 193, 180), (238, 228, 218), (237, 224, 200), (242, 177, 121
 
 GRID_SIZE = 4
 grid = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+score = 0
 
 def spawn_tile():
     empty_cells = [(x, y) for x in range(GRID_SIZE) for y in range(GRID_SIZE) if grid[x][y] == 0]
@@ -75,6 +76,7 @@ def slide_tiles(direction):
     return moved
 
 def merge_tiles(direction):
+    global score
     merged = False
     if direction == "left":
         for y in range(GRID_SIZE):
@@ -82,6 +84,7 @@ def merge_tiles(direction):
                 if grid[x][y] == grid[x+1][y] and grid[x][y] != 0:
                     grid[x][y] *= 2
                     grid[x+1][y] = 0
+                    score += grid[x][y]
                     merged = True
     elif direction == "right":
         for y in range(GRID_SIZE):
@@ -89,6 +92,7 @@ def merge_tiles(direction):
                 if grid[x][y] == grid[x-1][y] and grid[x][y] != 0:
                     grid[x][y] *= 2
                     grid[x-1][y] = 0
+                    score += grid[x][y]
                     merged = True
     elif direction == "up":
         for x in range(GRID_SIZE):
@@ -96,6 +100,7 @@ def merge_tiles(direction):
                 if grid[x][y] == grid[x][y+1] and grid[x][y] != 0:
                     grid[x][y] *= 2
                     grid[x][y+1] = 0
+                    score += grid[x][y]
                     merged = True
     elif direction == "down":
         for x in range(GRID_SIZE):
@@ -103,6 +108,7 @@ def merge_tiles(direction):
                 if grid[x][y] == grid[x][y-1] and grid[x][y] != 0:
                     grid[x][y] *= 2
                     grid[x][y-1] = 0
+                    score += grid[x][y]
                     merged = True
     return merged
 
@@ -113,12 +119,18 @@ def draw_grid():
             if value > 0:
                 color_index = int(math.log2(value)) - 1
                 tile_color = TILE_COLORS[color_index]
-                rect = pygame.Rect(x * 100, y * 100, 100, 100)
+                rect = pygame.Rect(x * 100, y * 100 + 100, 100, 100)
                 pygame.draw.rect(screen, tile_color, rect)
                 font = pygame.font.Font(None, 36)
                 text = font.render(str(value), True, (0, 0, 0))
                 text_rect = text.get_rect(center=rect.center)
                 screen.blit(text, text_rect)
+
+def draw_score():
+    font = pygame.font.Font(None, 48)
+    score_text = font.render(f"Score: {score}", True, (0, 0, 0))
+    score_rect = score_text.get_rect(center=(WINDOW_SIZE[0] // 2, 50))
+    screen.blit(score_text, score_rect)
 
 running = True
 spawn_tile()
@@ -153,6 +165,7 @@ while running:
                 spawn_tile()
 
     screen.fill(BACKGROUND_COLOR)
+    draw_score()
     draw_grid()
     pygame.display.flip()
 
